@@ -57,6 +57,13 @@ html, body {
     z-index: 110;
     display: flex;
     gap: 12px;
+    transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.top-nav-controls.ui-hidden {
+    opacity: 0;
+    transform: translateY(-20px);
+    pointer-events: none;
 }
 
 .nav-icon-btn {
@@ -78,6 +85,12 @@ html, body {
     transform: scale(1.1);
     border-color: var(--text-secondary);
     background: var(--accent-bg);
+}
+
+.nav-icon-btn.active {
+    background: var(--text-primary);
+    color: var(--app-bg);
+    border-color: var(--text-primary);
 }
 
 /* === Immersive App Container === */
@@ -103,7 +116,7 @@ html, body {
     text-decoration: none;
     font-weight: 500;
     opacity: 0.6;
-    transition: all 0.2s ease;
+    transition: all 0.5s ease;
     padding: 6px 12px;
     border-radius: 99px;
     background: var(--input-bg);
@@ -111,11 +124,49 @@ html, body {
     backdrop-filter: blur(4px);
 }
 
+.creator-credit.ui-hidden {
+    opacity: 0;
+    transform: translateY(-20px);
+    pointer-events: none;
+}
+
 .creator-credit:hover {
     opacity: 1;
     color: var(--text-primary);
     background: var(--accent-bg);
     border-color: var(--text-secondary);
+}
+
+/* === Full Screen Mode UI === */
+.exit-fullscreen-btn {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    background: var(--input-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 12px 24px;
+    border-radius: 99px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: slideUpFade 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    transition: background 0.2s;
+}
+
+.exit-fullscreen-btn:hover {
+    background: var(--accent-bg);
+}
+
+@keyframes slideUpFade {
+    from { opacity: 0; transform: translate(-50%, 20px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
 }
 
 /* === Stack Page === */
@@ -132,7 +183,7 @@ html, body {
 }
 
 .stack-content {
-    max-width: 900px;
+    max-width: 1200px;
     width: 100%;
     animation: dramaticEntrance 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -140,11 +191,21 @@ html, body {
 .stack-content h1 {
     font-size: 3rem;
     font-weight: 800;
-    margin-bottom: 40px;
+    margin-bottom: 12px;
     text-align: center;
     background: linear-gradient(to right, var(--text-primary), var(--text-secondary));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+}
+
+.vault-header-mood {
+    text-align: center;
+    margin-bottom: 48px;
+}
+.vault-header-mood p {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    margin: 0;
 }
 
 .stack-grid {
@@ -450,6 +511,17 @@ html, body {
     box-shadow: 0 50px 100px -20px rgba(0,0,0,0.6);
     border-color: var(--glass-border);
     cursor: default;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* === Fullscreen Mode Expansion === */
+.stage-container.mode-fullscreen .artifact-card.focused {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
 }
 
 .stage-container.mode-focus {
@@ -509,10 +581,12 @@ html, body {
     z-index: 100;
     padding: 0 20px; box-sizing: border-box;
     pointer-events: none;
+    transition: opacity 0.5s ease, transform 0.5s ease;
 }
 
 .floating-input-container.hidden {
     opacity: 0;
+    transform: translateY(40px);
     pointer-events: none;
 }
 
@@ -635,10 +709,16 @@ html, body {
     bottom: 100px;
     display: flex; flex-direction: column; align-items: center; gap: 12px;
     opacity: 0; transform: translateY(20px);
-    transition: all 0.4s ease-out 0.2s;
+    transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
     z-index: 90; pointer-events: none;
 }
 .action-bar.visible { opacity: 1; transform: translateY(0); }
+.action-bar.ui-hidden {
+    opacity: 0;
+    transform: translateY(40px);
+    pointer-events: none;
+}
+
 .active-prompt-label {
     color: var(--text-secondary); font-size: 0.9rem;
     background: var(--input-bg); padding: 6px 12px; border-radius: 20px;
@@ -672,6 +752,18 @@ html, body {
     font-weight: 600;
 }
 
+.action-buttons .fullscreen-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+}
+
+.saved-btn-active {
+    background: var(--text-primary) !important;
+    color: var(--app-bg) !important;
+}
+
 .action-hint {
     color: var(--text-secondary);
     font-size: 0.8rem;
@@ -690,6 +782,101 @@ html, body {
 .nav-handle:hover { opacity: 1 !important; color: var(--text-primary); }
 .nav-handle.left { left: 10px; }
 .nav-handle.right { right: 10px; }
+
+/* === Vault Moodboard Styles === */
+.moodboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 32px;
+    width: 100%;
+    margin-top: 24px;
+}
+
+.mood-item {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s ease, border-color 0.3s ease;
+}
+
+.mood-item:hover {
+    transform: translateY(-4px);
+    border-color: var(--text-secondary);
+}
+
+.mood-preview {
+    position: relative;
+    height: 240px;
+    background: #fff;
+    cursor: pointer;
+}
+
+.mood-preview iframe {
+    width: 100%; height: 100%; border: none;
+    pointer-events: none;
+}
+
+.mood-overlay {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.2s;
+}
+
+.mood-item:hover .mood-overlay {
+    opacity: 1;
+}
+
+.mood-overlay span {
+    background: #fff; color: #000;
+    padding: 8px 16px; border-radius: 99px;
+    font-weight: 600; font-size: 0.9rem;
+}
+
+.mood-footer {
+    padding: 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+}
+
+.mood-info {
+    display: flex; flex-direction: column; gap: 4px;
+    min-width: 0;
+}
+
+.mood-title {
+    font-weight: 600; font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.mood-prompt {
+    font-size: 0.8rem; color: var(--text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.mood-delete {
+    background: transparent; border: none; color: var(--text-secondary);
+    cursor: pointer; padding: 8px; border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.mood-delete:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.empty-vault-state {
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    padding: 80px 20px; text-align: center;
+    color: var(--text-secondary);
+}
+
+.empty-vault-state svg {
+    font-size: 4rem; opacity: 0.3;
+}
 
 /* === Drawer (Common) === */
 .drawer-overlay {
@@ -813,5 +1000,11 @@ html, body {
     }
     .stack-grid {
         grid-template-columns: 1fr;
+    }
+    .moodboard-grid {
+        grid-template-columns: 1fr;
+    }
+    .exit-fullscreen-btn {
+        bottom: 20px;
     }
 }

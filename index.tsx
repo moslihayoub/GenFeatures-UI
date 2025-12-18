@@ -11,7 +11,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import JSZip from 'jszip';
 
-import { Artifact, Session, ComponentVariation } from './types';
+import { Artifact, Session, ComponentVariation, ViewMode, SavedArtifact } from './types';
 import { INITIAL_PLACEHOLDERS } from './constants';
 import { generateId } from './utils';
 
@@ -30,10 +30,21 @@ import {
     MoonIcon,
     HomeIcon,
     StackIcon,
-    DownloadIcon
+    DownloadIcon,
+    BookmarkIcon,
+    TrashIcon,
+    MaximizeIcon,
+    MinimizeIcon
 } from './components/Icons';
 
-type ViewMode = 'main' | 'stack';
+const SYSTEM_INSTRUCTION = `
+You are a master UI/UX engineer. Your goal is to generate high-fidelity, production-ready UI components using Tailwind CSS.
+CRITICAL RULES:
+1. ALWAYS use Tailwind 'dark:' utility classes to ensure the component looks great in both Light and Dark modes.
+2. Use professional typography (Inter) and modern spacing.
+3. Output ONLY the raw HTML/JSX-compatible code. No markdown code fences.
+4. Ensure backgrounds use 'bg-white dark:bg-zinc-950' or similar to react to theme changes.
+`.trim();
 
 function App() {
   const [view, setView] = useState<ViewMode>('main');
@@ -41,6 +52,8 @@ function App() {
   const [currentSessionIndex, setCurrentSessionIndex] = useState<number>(-1);
   const [focusedArtifactIndex, setFocusedArtifactIndex] = useState<number | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [savedArtifacts, setSavedArtifacts] = useState<SavedArtifact[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   
   const [inputValue, setInputValue] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -62,6 +75,23 @@ function App() {
   useEffect(() => {
       inputRef.current?.focus();
   }, [view]);
+
+  // Load saved artifacts from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('genfeatures_vault');
+    if (saved) {
+        try {
+            setSavedArtifacts(JSON.parse(saved));
+        } catch (e) {
+            console.error("Failed to parse vault", e);
+        }
+    }
+  }, []);
+
+  // Sync saved artifacts to localStorage
+  useEffect(() => {
+    localStorage.setItem('genfeatures_vault', JSON.stringify(savedArtifacts));
+  }, [savedArtifacts]);
 
   // Update document title and body data-theme
   useEffect(() => {
@@ -173,7 +203,8 @@ function App() {
         const ai = new GoogleGenAI({ apiKey });
 
         const prompt = `
-You are a master UI/UX designer. Generate 3 RADICAL CONCEPTUAL VARIATIONS of: "${currentSession.prompt}".
+Generate 3 RADICAL CONCEPTUAL VARIATIONS of: "${currentSession.prompt}".
+Ensure all variations are fully adaptive to both Light and Dark modes using Tailwind classes.
 Required JSON Output Format (stream ONE object per line):
 \`{ "name": "Persona Name", "html": "..." }\`
         `.trim();
@@ -181,7 +212,7 @@ Required JSON Output Format (stream ONE object per line):
         const responseStream = await ai.models.generateContentStream({
             model: 'gemini-3-flash-preview',
              contents: [{ parts: [{ text: prompt }], role: 'user' }],
-             config: { temperature: 1.2 }
+             config: { temperature: 1.2, systemInstruction: SYSTEM_INSTRUCTION }
         });
 
         for await (const variation of parseJsonStream(responseStream)) {
@@ -236,12 +267,47 @@ Required JSON Output Format (stream ONE object per line):
     URL.revokeObjectURL(url);
   };
 
+  const handleSaveArtifact = () => {
+    const currentSession = sessions[currentSessionIndex];
+    if (!currentSession || focusedArtifactIndex === null) return;
+    const artifact = currentSession.artifacts[focusedArtifactIndex];
+
+    if (savedArtifacts.some(s => s.id === artifact.id)) return;
+
+    const toSave: SavedArtifact = {
+        ...artifact,
+        prompt: currentSession.prompt,
+        savedAt: Date.now()
+    };
+
+    setSavedArtifacts(prev => [toSave, ...prev]);
+  };
+
+  const handleRemoveFromVault = (id: string) => {
+    setSavedArtifacts(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleRestoreFromVault = (saved: SavedArtifact) => {
+    const sessionId = generateId();
+    const newSession: Session = {
+        id: sessionId,
+        prompt: saved.prompt,
+        timestamp: Date.now(),
+        artifacts: [{ ...saved, id: generateId() }]
+    };
+    setSessions(prev => [...prev, newSession]);
+    setCurrentSessionIndex(sessions.length);
+    setFocusedArtifactIndex(0);
+    setView('main');
+  };
+
   const handleGoHome = () => {
     setView('main');
     setSessions([]);
     setCurrentSessionIndex(-1);
     setFocusedArtifactIndex(null);
     setInputValue('');
+    setIsFullscreen(false);
   };
 
   const handleSendMessage = useCallback(async (manualPrompt?: string) => {
@@ -317,11 +383,12 @@ Required JSON Output Format (stream ONE object per line):
 
         const generateArtifact = async (artifact: Artifact, styleInstruction: string) => {
             try {
-                const prompt = `Create a high-fidelity HTML/CSS component for: "${trimmedInput}". Direction: ${styleInstruction}. NO MARKDOWN FENCES.`;
+                const prompt = `Create a high-fidelity HTML/CSS component for: "${trimmedInput}". Direction: ${styleInstruction}. IMPORTANT: Support both light and dark mode using Tailwind classes. NO MARKDOWN FENCES.`;
           
                 const responseStream = await ai.models.generateContentStream({
                     model: 'gemini-3-flash-preview',
                     contents: [{ parts: [{ text: prompt }], role: "user" }],
+                    config: { systemInstruction: SYSTEM_INSTRUCTION }
                 });
 
                 let accumulatedHtml = '';
@@ -404,13 +471,17 @@ Required JSON Output Format (stream ONE object per line):
       setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
+  const handleToggleFullscreen = () => {
+    setIsFullscreen(prev => !prev);
+  };
+
   const hasStarted = sessions.length > 0 || isLoading;
   const currentSession = sessions[currentSessionIndex];
 
   let canGoBack = false;
   let canGoForward = false;
 
-  if (hasStarted && view === 'main') {
+  if (hasStarted && view === 'main' && !isFullscreen) {
       if (focusedArtifactIndex !== null) {
           canGoBack = focusedArtifactIndex > 0;
           canGoForward = focusedArtifactIndex < (currentSession?.artifacts.length || 0) - 1;
@@ -422,16 +493,19 @@ Required JSON Output Format (stream ONE object per line):
 
   return (
     <>
-        <div className="top-nav-controls">
+        <div className={`top-nav-controls ${isFullscreen ? 'ui-hidden' : ''}`}>
             <button className="nav-icon-btn" onClick={toggleTheme} aria-label="Toggle Theme">
                 {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
             </button>
             <button className={`nav-icon-btn ${view === 'stack' ? 'active' : ''}`} onClick={() => setView(view === 'stack' ? 'main' : 'stack')} title="View Tech Stack">
                 <StackIcon />
             </button>
+            <button className={`nav-icon-btn ${view === 'vault' ? 'active' : ''}`} onClick={() => setView(view === 'vault' ? 'main' : 'vault')} title="Vault / Moodboard">
+                <BookmarkIcon />
+            </button>
         </div>
 
-        <a href="https://bento.me/moslih84" target="_blank" rel="noreferrer" className={`creator-credit ${hasStarted ? 'hide-on-mobile' : ''}`}>
+        <a href="https://bento.me/moslih84" target="_blank" rel="noreferrer" className={`creator-credit ${hasStarted ? 'hide-on-mobile' : ''} ${isFullscreen ? 'ui-hidden' : ''}`}>
             created by Moslih84
         </a>
 
@@ -508,8 +582,56 @@ Required JSON Output Format (stream ONE object per line):
                         </button>
                     </div>
                 </div>
+            ) : view === 'vault' ? (
+                <div className="stack-page">
+                    <div className="stack-content">
+                        <div className="vault-header-mood">
+                            <h1>Vault Moodboard</h1>
+                            <p>Stored locally in your browser</p>
+                        </div>
+                        
+                        {savedArtifacts.length === 0 ? (
+                            <div className="empty-vault-state">
+                                <BookmarkIcon />
+                                <p>No components saved yet. Star your favorites to see them here.</p>
+                                <button className="surprise-button" onClick={() => setView('main')}>Return to Generate</button>
+                            </div>
+                        ) : (
+                            <div className="moodboard-grid">
+                                {savedArtifacts.map(saved => (
+                                    <div key={saved.id} className="mood-item">
+                                        <div className="mood-preview" onClick={() => handleRestoreFromVault(saved)}>
+                                            <ArtifactCard 
+                                                artifact={saved} 
+                                                isFocused={false} 
+                                                theme={theme}
+                                                onClick={() => {}}
+                                            />
+                                            <div className="mood-overlay">
+                                                <span>Restore</span>
+                                            </div>
+                                        </div>
+                                        <div className="mood-footer">
+                                            <div className="mood-info">
+                                                <span className="mood-title">{saved.styleName}</span>
+                                                <span className="mood-prompt">{saved.prompt}</span>
+                                            </div>
+                                            <button className="mood-delete" onClick={() => handleRemoveFromVault(saved.id)}>
+                                                <TrashIcon />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        
+                        <button className="back-btn" onClick={() => setView('main')} style={{ marginTop: '40px' }}>
+                            <HomeIcon /> Return Home
+                        </button>
+                    </div>
+                </div>
             ) : (
-                <div className={`stage-container ${focusedArtifactIndex !== null ? 'mode-focus' : 'mode-split'}`}>
+                <div className={`stage-container ${focusedArtifactIndex !== null ? 'mode-focus' : 'mode-split'} ${isFullscreen ? 'mode-fullscreen' : ''}`}>
                     <div className={`empty-state ${hasStarted ? 'fade-out' : ''}`}>
                         <div className="empty-content">
                             <h1>GenFeatures</h1>
@@ -537,6 +659,7 @@ Required JSON Output Format (stream ONE object per line):
                                                 key={artifact.id}
                                                 artifact={artifact}
                                                 isFocused={isFocused}
+                                                theme={theme}
                                                 onClick={() => setFocusedArtifactIndex(aIndex)}
                                             />
                                         );
@@ -559,7 +682,13 @@ Required JSON Output Format (stream ONE object per line):
                 </button>
              )}
 
-            <div className={`action-bar ${hasStarted && view === 'main' ? 'visible' : ''}`}>
+            {isFullscreen && (
+                <button className="exit-fullscreen-btn" onClick={handleToggleFullscreen} title="Exit Full Screen">
+                    <MinimizeIcon /> Exit Full Screen
+                </button>
+            )}
+
+            <div className={`action-bar ${hasStarted && view === 'main' ? 'visible' : ''} ${isFullscreen ? 'ui-hidden' : ''}`}>
                  <div className="active-prompt-label">
                     {currentSession?.prompt}
                  </div>
@@ -572,6 +701,9 @@ Required JSON Output Format (stream ONE object per line):
                             <button onClick={() => setFocusedArtifactIndex(null)}>
                                 <GridIcon /> Grid View
                             </button>
+                            <button onClick={handleSaveArtifact} className={savedArtifacts.some(s => s.id === sessions[currentSessionIndex]?.artifacts[focusedArtifactIndex!]?.id) ? 'saved-btn-active' : ''}>
+                                <BookmarkIcon /> {savedArtifacts.some(s => s.id === sessions[currentSessionIndex]?.artifacts[focusedArtifactIndex!]?.id) ? 'Saved' : 'Save'}
+                            </button>
                             <button onClick={handleGenerateVariations} disabled={isLoading}>
                                 <SparklesIcon /> Variations
                             </button>
@@ -581,6 +713,9 @@ Required JSON Output Format (stream ONE object per line):
                             <button className="download-btn" onClick={handleDownloadZip}>
                                 <DownloadIcon /> Download ZIP
                             </button>
+                            <button className="fullscreen-btn" onClick={handleToggleFullscreen} title="Full Screen">
+                                <MaximizeIcon />
+                            </button>
                         </>
                     ) : (
                         <div className="action-hint">Select a variation to edit</div>
@@ -588,7 +723,7 @@ Required JSON Output Format (stream ONE object per line):
                  </div>
             </div>
 
-            <div className={`floating-input-container ${view === 'stack' ? 'hidden' : ''}`}>
+            <div className={`floating-input-container ${view !== 'main' || isFullscreen ? 'hidden' : ''}`}>
                 <div className={`input-wrapper ${isLoading ? 'loading' : ''}`}>
                     {(!inputValue && !isLoading) && (
                         <div className="animated-placeholder" key={placeholderIndex}>
