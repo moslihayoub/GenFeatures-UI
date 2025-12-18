@@ -94,7 +94,7 @@ html, body {
 }
 
 /* Ensure icons inside buttons don't capture click events */
-button svg {
+button * {
     pointer-events: none;
 }
 
@@ -285,7 +285,7 @@ button svg {
     align-items: center;
     justify-content: center;
     gap: 12px;
-    margin: 0 auto;
+    margin: 40px auto 0;
     background: var(--text-primary);
     color: var(--app-bg);
     border: none;
@@ -296,15 +296,11 @@ button svg {
     transition: transform 0.2s ease, background 0.2s ease;
     z-index: 10;
     position: relative;
-    user-select: none;
+    width: fit-content;
 }
 
 .back-btn:hover {
     transform: scale(1.05);
-}
-
-.back-btn * {
-    pointer-events: none;
 }
 
 /* === Stage (The Deck) === */

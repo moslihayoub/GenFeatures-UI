@@ -11,13 +11,13 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import JSZip from 'jszip';
 
-import { Artifact, Session, ComponentVariation, ViewMode, SavedArtifact } from './types';
-import { INITIAL_PLACEHOLDERS } from './constants';
-import { generateId } from './utils';
+import { Artifact, Session, ComponentVariation, ViewMode, SavedArtifact } from './types.ts';
+import { INITIAL_PLACEHOLDERS } from './constants.ts';
+import { generateId } from './utils.ts';
 
-import DottedGlowBackground from './components/DottedGlowBackground';
-import ArtifactCard from './components/ArtifactCard';
-import SideDrawer from './components/SideDrawer';
+import DottedGlowBackground from './components/DottedGlowBackground.tsx';
+import ArtifactCard from './components/ArtifactCard.tsx';
+import SideDrawer from './components/SideDrawer.tsx';
 import { 
     ThinkingIcon, 
     CodeIcon, 
@@ -35,7 +35,7 @@ import {
     TrashIcon,
     MaximizeIcon,
     MinimizeIcon
-} from './components/Icons';
+} from './components/Icons.tsx';
 
 const SYSTEM_INSTRUCTION = `
 You are a master UI/UX engineer. Your goal is to generate high-fidelity, production-ready UI components using Tailwind CSS.
@@ -295,8 +295,11 @@ Required JSON Output Format (stream ONE object per line):
         timestamp: Date.now(),
         artifacts: [{ ...saved, id: generateId() }]
     };
-    setSessions(prev => [...prev, newSession]);
-    setCurrentSessionIndex(sessions.length);
+    setSessions(prev => {
+        const next = [...prev, newSession];
+        setCurrentSessionIndex(next.length - 1);
+        return next;
+    });
     setFocusedArtifactIndex(0);
     setView('main');
   };
@@ -707,7 +710,7 @@ Required JSON Output Format (stream ONE object per line):
                             <button onClick={handleGenerateVariations} disabled={isLoading}>
                                 <SparklesIcon /> Variations
                             </button>
-                            <button onClick={handleShowCode}>
+                            <button onClick={handleShowCode} aria-label="Source Code">
                                 <CodeIcon /> Source
                             </button>
                             <button className="download-btn" onClick={handleDownloadZip}>
