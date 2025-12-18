@@ -55,9 +55,11 @@ html, body {
     top: 24px;
     left: 24px;
     z-index: 110;
+    display: flex;
+    gap: 12px;
 }
 
-.theme-toggle {
+.nav-icon-btn {
     background: var(--input-bg);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
@@ -72,9 +74,10 @@ html, body {
     transition: all 0.2s ease;
 }
 
-.theme-toggle:hover {
+.nav-icon-btn:hover, .nav-icon-btn.active {
     transform: scale(1.1);
     border-color: var(--text-secondary);
+    background: var(--accent-bg);
 }
 
 /* === Immersive App Container === */
@@ -113,6 +116,121 @@ html, body {
     color: var(--text-primary);
     background: var(--accent-bg);
     border-color: var(--text-secondary);
+}
+
+/* === Stack Page === */
+.stack-page {
+    position: absolute;
+    inset: 0;
+    z-index: 95;
+    background: var(--app-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.stack-content {
+    max-width: 900px;
+    width: 100%;
+    animation: dramaticEntrance 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.stack-content h1 {
+    font-size: 3rem;
+    font-weight: 800;
+    margin-bottom: 40px;
+    text-align: center;
+    background: linear-gradient(to right, var(--text-primary), var(--text-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.stack-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    margin-bottom: 48px;
+}
+
+.stack-section {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    padding: 32px;
+    backdrop-filter: blur(16px);
+}
+
+.stack-section h3 {
+    margin-top: 0;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 1.5rem;
+}
+
+.stack-section ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.stack-section li {
+    margin-bottom: 16px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.stack-section strong {
+    color: var(--text-primary);
+}
+
+.flow-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.flow-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    color: var(--text-secondary);
+}
+
+.flow-item span {
+    width: 28px;
+    height: 28px;
+    background: var(--accent-bg);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.back-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 auto;
+    background: var(--text-primary);
+    color: var(--app-bg);
+    border: none;
+    padding: 12px 32px;
+    border-radius: 99px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.back-btn:hover {
+    transform: scale(1.05);
 }
 
 /* === Stage (The Deck) === */
@@ -393,6 +511,11 @@ html, body {
     pointer-events: none;
 }
 
+.floating-input-container.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
 .input-wrapper {
     pointer-events: auto;
     width: 100%; max-width: 600px;
@@ -541,6 +664,14 @@ html, body {
     border-color: var(--text-secondary);
     transform: translateY(-2px);
 }
+
+.action-buttons .download-btn {
+    background: var(--text-primary);
+    color: var(--app-bg);
+    border-color: var(--text-primary);
+    font-weight: 600;
+}
+
 .action-hint {
     color: var(--text-secondary);
     font-size: 0.8rem;
@@ -679,5 +810,8 @@ html, body {
     .floating-input-container {
         padding: 0 10px;
         bottom: 20px;
+    }
+    .stack-grid {
+        grid-template-columns: 1fr;
     }
 }

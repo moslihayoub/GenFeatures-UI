@@ -9,8 +9,9 @@
 import { GoogleGenAI } from '@google/genai';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
+import JSZip from 'jszip';
 
-import { Artifact, Session, ComponentVariation, LayoutOption } from './types';
+import { Artifact, Session, ComponentVariation } from './types';
 import { INITIAL_PLACEHOLDERS } from './constants';
 import { generateId } from './utils';
 
@@ -27,10 +28,15 @@ import {
     GridIcon,
     SunIcon,
     MoonIcon,
-    HomeIcon
+    HomeIcon,
+    StackIcon,
+    DownloadIcon
 } from './components/Icons';
 
+type ViewMode = 'main' | 'stack';
+
 function App() {
+  const [view, setView] = useState<ViewMode>('main');
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSessionIndex, setCurrentSessionIndex] = useState<number>(-1);
   const [focusedArtifactIndex, setFocusedArtifactIndex] = useState<number | null>(null);
@@ -55,7 +61,7 @@ function App() {
 
   useEffect(() => {
       inputRef.current?.focus();
-  }, []);
+  }, [view]);
 
   // Update document title and body data-theme
   useEffect(() => {
@@ -168,23 +174,6 @@ function App() {
 
         const prompt = `
 You are a master UI/UX designer. Generate 3 RADICAL CONCEPTUAL VARIATIONS of: "${currentSession.prompt}".
-
-**STRICT IP SAFEGUARD:**
-No names of artists. 
-Instead, describe the *Physicality* and *Material Logic* of the UI.
-
-**CREATIVE GUIDANCE (Use these as EXAMPLES of how to describe style, but INVENT YOUR OWN):**
-1. Example: "Asymmetrical Primary Grid" (Heavy black strokes, rectilinear structure, flat primary pigments, high-contrast white space).
-2. Example: "Suspended Kinetic Mobile" (Delicate wire-thin connections, floating organic primary shapes, slow-motion balance, white-void background).
-3. Example: "Grainy Risograph Press" (Overprinted translucent inks, dithered grain textures, monochromatic color depth, raw paper substrate).
-4. Example: "Volumetric Spectral Fluid" (Generative morphing gradients, soft-focus diffusion, bioluminescent light sources, spectral chromatic aberration).
-
-**YOUR TASK:**
-For EACH variation:
-- Invent a unique design persona name based on a NEW physical metaphor.
-- Rewrite the prompt to fully adopt that metaphor's visual language.
-- Generate high-fidelity HTML/CSS.
-
 Required JSON Output Format (stream ONE object per line):
 \`{ "name": "Persona Name", "html": "..." }\`
         `.trim();
@@ -228,7 +217,27 @@ Required JSON Output Format (stream ONE object per line):
       }
   };
 
+  const handleDownloadZip = async () => {
+    const currentSession = sessions[currentSessionIndex];
+    if (!currentSession || focusedArtifactIndex === null) return;
+    const artifact = currentSession.artifacts[focusedArtifactIndex];
+    
+    const zip = new JSZip();
+    zip.file("index.html", artifact.html);
+    
+    const content = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(content);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `genfeatures-${artifact.id}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const handleGoHome = () => {
+    setView('main');
     setSessions([]);
     setCurrentSessionIndex(-1);
     setFocusedArtifactIndex(null);
@@ -243,6 +252,7 @@ Required JSON Output Format (stream ONE object per line):
     if (!manualPrompt) setInputValue('');
 
     setIsLoading(true);
+    setView('main');
     const baseTime = Date.now();
     const sessionId = generateId();
 
@@ -269,21 +279,7 @@ Required JSON Output Format (stream ONE object per line):
         if (!apiKey) throw new Error("API_KEY is not configured.");
         const ai = new GoogleGenAI({ apiKey });
 
-        const stylePrompt = `
-Generate 3 distinct, highly evocative design directions for: "${trimmedInput}".
-
-**STRICT IP SAFEGUARD:**
-Never use artist or brand names. Use physical and material metaphors.
-
-**CREATIVE EXAMPLES (Do not simply copy these, use them as a guide for tone):**
-- Example A: "Asymmetrical Rectilinear Blockwork" (Grid-heavy, primary pigments, thick structural strokes, Bauhaus-functionalism vibe).
-- Example B: "Grainy Risograph Layering" (Tactile paper texture, overprinted translucent inks, dithered gradients).
-- Example C: "Kinetic Wireframe Suspension" (Floating silhouettes, thin balancing lines, organic primary shapes).
-- Example D: "Spectral Prismatic Diffusion" (Glassmorphism, caustic refraction, soft-focus morphing gradients).
-
-**GOAL:**
-Return ONLY a raw JSON array of 3 *NEW*, creative names for these directions (e.g. ["Tactile Risograph Press", "Kinetic Silhouette Balance", "Primary Pigment Gridwork"]).
-        `.trim();
+        const stylePrompt = `Generate 3 distinct creative names for UI directions for: "${trimmedInput}". Return JSON array.`;
 
         const styleResponse = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
@@ -303,11 +299,7 @@ Return ONLY a raw JSON array of 3 *NEW*, creative names for these directions (e.
         }
 
         if (!generatedStyles || generatedStyles.length < 3) {
-            generatedStyles = [
-                "Primary Pigment Gridwork",
-                "Tactile Risograph Layering",
-                "Kinetic Silhouette Balance"
-            ];
+            generatedStyles = ["Modern Minimal", "High-Tech Dark", "Organic Flow"];
         }
         
         generatedStyles = generatedStyles.slice(0, 3);
@@ -325,20 +317,7 @@ Return ONLY a raw JSON array of 3 *NEW*, creative names for these directions (e.
 
         const generateArtifact = async (artifact: Artifact, styleInstruction: string) => {
             try {
-                const prompt = `
-You are Flash UI. Create a stunning, high-fidelity UI component for: "${trimmedInput}".
-
-**CONCEPTUAL DIRECTION: ${styleInstruction}**
-
-**VISUAL EXECUTION RULES:**
-1. **Materiality**: Use the specified metaphor to drive every CSS choice. (e.g. if Risograph, use \`feTurbulence\` for grain and \`mix-blend-mode: multiply\` for ink layering).
-2. **Typography**: Use high-quality web fonts. Pair a bold sans-serif with a refined monospace for data.
-3. **Motion**: Include subtle, high-performance CSS/JS animations (hover transitions, entry reveals).
-4. **IP SAFEGUARD**: No artist names or trademarks. 
-5. **Layout**: Be bold with negative space and hierarchy. Avoid generic cards.
-
-Return ONLY RAW HTML. No markdown fences.
-          `.trim();
+                const prompt = `Create a high-fidelity HTML/CSS component for: "${trimmedInput}". Direction: ${styleInstruction}. NO MARKDOWN FENCES.`;
           
                 const responseStream = await ai.models.generateContentStream({
                     model: 'gemini-3-flash-preview',
@@ -377,14 +356,6 @@ Return ONLY RAW HTML. No markdown fences.
 
             } catch (e: any) {
                 console.error('Error generating artifact:', e);
-                setSessions(prev => prev.map(sess => 
-                    sess.id === sessionId ? {
-                        ...sess,
-                        artifacts: sess.artifacts.map(art => 
-                            art.id === artifact.id ? { ...art, html: `<div style="color: #ff6b6b; padding: 20px;">Error: ${e.message}</div>`, status: 'error' } : art
-                        )
-                    } : sess
-                ));
             }
         };
 
@@ -394,7 +365,6 @@ Return ONLY RAW HTML. No markdown fences.
         console.error("Fatal error in generation process", e);
     } finally {
         setIsLoading(false);
-        setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [inputValue, isLoading, sessions.length]);
 
@@ -434,15 +404,13 @@ Return ONLY RAW HTML. No markdown fences.
       setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const isLoadingDrawer = isLoading && drawerState.mode === 'variations' && componentVariations.length === 0;
-
   const hasStarted = sessions.length > 0 || isLoading;
   const currentSession = sessions[currentSessionIndex];
 
   let canGoBack = false;
   let canGoForward = false;
 
-  if (hasStarted) {
+  if (hasStarted && view === 'main') {
       if (focusedArtifactIndex !== null) {
           canGoBack = focusedArtifactIndex > 0;
           canGoForward = focusedArtifactIndex < (currentSession?.artifacts.length || 0) - 1;
@@ -455,8 +423,11 @@ Return ONLY RAW HTML. No markdown fences.
   return (
     <>
         <div className="top-nav-controls">
-            <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle Theme">
+            <button className="nav-icon-btn" onClick={toggleTheme} aria-label="Toggle Theme">
                 {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+            </button>
+            <button className={`nav-icon-btn ${view === 'stack' ? 'active' : ''}`} onClick={() => setView(view === 'stack' ? 'main' : 'stack')} title="View Tech Stack">
+                <StackIcon />
             </button>
         </div>
 
@@ -469,7 +440,7 @@ Return ONLY RAW HTML. No markdown fences.
             onClose={() => setDrawerState(s => ({...s, isOpen: false}))} 
             title={drawerState.title}
         >
-            {isLoadingDrawer && (
+            {isLoading && drawerState.mode === 'variations' && componentVariations.length === 0 && (
                  <div className="loading-state">
                      <ThinkingIcon /> 
                      Designing variations...
@@ -503,43 +474,79 @@ Return ONLY RAW HTML. No markdown fences.
                 speedScale={0.5} 
             />
 
-            <div className={`stage-container ${focusedArtifactIndex !== null ? 'mode-focus' : 'mode-split'}`}>
-                 <div className={`empty-state ${hasStarted ? 'fade-out' : ''}`}>
-                     <div className="empty-content">
-                         <h1>GenFeatures</h1>
-                         <p>Creative UI generation in a flash</p>
-                         <button className="surprise-button" onClick={handleSurpriseMe} disabled={isLoading}>
-                             <SparklesIcon /> Surprise Me
-                         </button>
-                     </div>
-                 </div>
+            {view === 'stack' ? (
+                <div className="stack-page">
+                    <div className="stack-content">
+                        <h1>Project Stack & Flow</h1>
+                        
+                        <div className="stack-grid">
+                            <section className="stack-section">
+                                <h3><CodeIcon /> Technologies</h3>
+                                <ul>
+                                    <li><strong>React 19:</strong> Fast, declarative UI library.</li>
+                                    <li><strong>Gemini 3 Flash:</strong> State-of-the-art AI for rapid code generation.</li>
+                                    <li><strong>CSS3 Variables:</strong> Dynamic theming and Glassmorphism.</li>
+                                    <li><strong>JSZip:</strong> Client-side component export.</li>
+                                    <li><strong>Vercel:</strong> High-performance cloud hosting.</li>
+                                </ul>
+                            </section>
 
-                {sessions.map((session, sIndex) => {
-                    let positionClass = 'hidden';
-                    if (sIndex === currentSessionIndex) positionClass = 'active-session';
-                    else if (sIndex < currentSessionIndex) positionClass = 'past-session';
-                    else if (sIndex > currentSessionIndex) positionClass = 'future-session';
-                    
-                    return (
-                        <div key={session.id} className={`session-group ${positionClass}`}>
-                            <div className="artifact-grid" ref={sIndex === currentSessionIndex ? gridScrollRef : null}>
-                                {session.artifacts.map((artifact, aIndex) => {
-                                    const isFocused = focusedArtifactIndex === aIndex;
-                                    
-                                    return (
-                                        <ArtifactCard 
-                                            key={artifact.id}
-                                            artifact={artifact}
-                                            isFocused={isFocused}
-                                            onClick={() => setFocusedArtifactIndex(aIndex)}
-                                        />
-                                    );
-                                })}
-                            </div>
+                            <section className="stack-section">
+                                <h3><SparklesIcon /> User Flow</h3>
+                                <div className="flow-steps">
+                                    <div className="flow-item"><span>1</span> Prompt input via natural language</div>
+                                    <div className="flow-item"><span>2</span> Style imagination (Gemini direction)</div>
+                                    <div className="flow-item"><span>3</span> Parallel component generation</div>
+                                    <div className="flow-item"><span>4</span> Live preview and source inspection</div>
+                                    <div className="flow-item"><span>5</span> Download as ZIP for local dev</div>
+                                </div>
+                            </section>
                         </div>
-                    );
-                })}
-            </div>
+
+                        <button className="back-btn" onClick={() => setView('main')}>
+                            <HomeIcon /> Return Home
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className={`stage-container ${focusedArtifactIndex !== null ? 'mode-focus' : 'mode-split'}`}>
+                    <div className={`empty-state ${hasStarted ? 'fade-out' : ''}`}>
+                        <div className="empty-content">
+                            <h1>GenFeatures</h1>
+                            <p>Creative UI generation in a flash</p>
+                            <button className="surprise-button" onClick={handleSurpriseMe} disabled={isLoading}>
+                                <SparklesIcon /> Surprise Me
+                            </button>
+                        </div>
+                    </div>
+
+                    {sessions.map((session, sIndex) => {
+                        let positionClass = 'hidden';
+                        if (sIndex === currentSessionIndex) positionClass = 'active-session';
+                        else if (sIndex < currentSessionIndex) positionClass = 'past-session';
+                        else if (sIndex > currentSessionIndex) positionClass = 'future-session';
+                        
+                        return (
+                            <div key={session.id} className={`session-group ${positionClass}`}>
+                                <div className="artifact-grid" ref={sIndex === currentSessionIndex ? gridScrollRef : null}>
+                                    {session.artifacts.map((artifact, aIndex) => {
+                                        const isFocused = focusedArtifactIndex === aIndex;
+                                        
+                                        return (
+                                            <ArtifactCard 
+                                                key={artifact.id}
+                                                artifact={artifact}
+                                                isFocused={isFocused}
+                                                onClick={() => setFocusedArtifactIndex(aIndex)}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
 
              {canGoBack && (
                 <button className="nav-handle left" onClick={prevItem} aria-label="Previous">
@@ -552,7 +559,7 @@ Return ONLY RAW HTML. No markdown fences.
                 </button>
              )}
 
-            <div className={`action-bar ${hasStarted ? 'visible' : ''}`}>
+            <div className={`action-bar ${hasStarted && view === 'main' ? 'visible' : ''}`}>
                  <div className="active-prompt-label">
                     {currentSession?.prompt}
                  </div>
@@ -571,6 +578,9 @@ Return ONLY RAW HTML. No markdown fences.
                             <button onClick={handleShowCode}>
                                 <CodeIcon /> Source
                             </button>
+                            <button className="download-btn" onClick={handleDownloadZip}>
+                                <DownloadIcon /> Download ZIP
+                            </button>
                         </>
                     ) : (
                         <div className="action-hint">Select a variation to edit</div>
@@ -578,7 +588,7 @@ Return ONLY RAW HTML. No markdown fences.
                  </div>
             </div>
 
-            <div className="floating-input-container">
+            <div className={`floating-input-container ${view === 'stack' ? 'hidden' : ''}`}>
                 <div className={`input-wrapper ${isLoading ? 'loading' : ''}`}>
                     {(!inputValue && !isLoading) && (
                         <div className="animated-placeholder" key={placeholderIndex}>
